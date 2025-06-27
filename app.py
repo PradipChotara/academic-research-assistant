@@ -11,6 +11,10 @@ from llama_index.core import (
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 
+# --- NEW IMPORTS FOR ERROR HANDLING ---
+from httpx import ReadTimeout
+from ollama import ResponseError
+
 # --- App Configuration ---
 st.set_page_config(
     page_title="Academic Research Assistant",
@@ -27,14 +31,11 @@ DATA_DIR = "./research_papers"
 PERSIST_DIR = "./storage"
 
 # --- LlamaIndex Setup (Cached for Performance) ---
-# Using Streamlit's caching to load models and data only once.
-
 @st.cache_resource(show_spinner="Connecting to AI models...")
 def configure_ai():
     """Sets up the LlamaIndex settings and loads the Ollama models."""
     Settings.llm = Ollama(model="mistral", request_timeout=300.0)
     Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
-    print("AI Models configured.")
 
 @st.cache_resource(show_spinner="Loading and indexing your documents... This might take a moment.")
 def load_and_index_data():
@@ -48,20 +49,19 @@ def load_and_index_data():
     else:
         storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
         index = load_index_from_storage(storage_context)
-        # Optional: Add logic here to refresh the index if new documents are added
-        # For now, we assume the index is up-to-date for simplicity.
     return index
 
 # --- Main App Logic ---
-configure_ai()
-index = load_and_index_data()
+try:
+    configure_ai()
+    index = load_and_index_data()
+except Exception as e:
+    st.error(f"Failed to initialize the application. Please check your setup. Error: {e}", icon="🚨")
+    st.stop() # Stop the app if setup fails
 
 # Initialize the chat engine in Streamlit's session state if it doesn't exist
 if "chat_engine" not in st.session_state:
-    st.session_state.chat_engine = index.as_chat_engine(
-        chat_mode="context",
-        verbose=True
-    )
+    st.session_state.chat_engine = index.as_chat_engine(chat_mode="context", verbose=True)
 
 # Initialize the chat messages history in session state
 if "messages" not in st.session_state:
@@ -75,7 +75,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# Get user input from the chat input box at the bottom
+# --- MODIFIED SECTION: Get user input and handle errors ---
 if prompt := st.chat_input("Ask a question about your documents..."):
     # Add user message to session state and display it
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -86,21 +86,42 @@ if prompt := st.chat_input("Ask a question about your documents..."):
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = st.session_state.chat_engine.stream_chat(prompt)
-                
-                # Stream the response to the UI
-                response_str = ""
-                response_container = st.empty()
-                for token in response.response_gen:
-                    response_str += token
-                    response_container.markdown(response_str)
+                try:
+                    response = st.session_state.chat_engine.chat(prompt)
+                    
+                    response_str = response.response
+                    sources = "\n".join([f"- {os.path.basename(node.metadata.get('file_name', 'N/A'))} (Page: {node.metadata.get('page_label', 'N/A')})" for node in response.source_nodes])
+                    
+                    # Display the response and sources
+                    st.write(response_str)
+                    st.info(f"Sources:\n{sources}")
+                    
+                    # Add the full assistant response to session state
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response_str
+                    })
 
-                # Display sources after the response is complete
-                sources = "\n".join([f"- {os.path.basename(node.metadata.get('file_name', 'N/A'))} (Page: {node.metadata.get('page_label', 'N/A')})" for node in response.source_nodes])
-                st.info(f"Sources:\n{sources}")
+                # --- Catch specific, known errors and display friendly messages ---
+                except ReadTimeout:
+                    error_message = "The AI model took too long to respond. This can happen on very complex questions. Please try asking a simpler question or try again."
+                    st.error(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
+
+                except ResponseError as e:
+                    error_text = str(e).lower()
+                    if "memory" in error_text:
+                        error_message = "The AI model ran out of memory. The server may be under heavy load or the question is too complex. Please try again later."
+                    elif "not found" in error_text:
+                        error_message = "The AI model specified is not available on the server. Please contact the administrator."
+                    else:
+                        error_message = f"An error occurred with the AI model: {e}"
+                    
+                    st.error(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
                 
-                # Add the full assistant response to session state
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response_str
-                })
+                # --- Catch any other unexpected errors ---
+                except Exception as e:
+                    error_message = f"An unexpected error occurred: {e}"
+                    st.error(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
