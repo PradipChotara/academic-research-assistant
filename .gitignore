@@ -1,0 +1,28 @@
+# Python Virtual Environment
+# This is machine-specific and should never be committed.
+/venv/
+
+# LlamaIndex generated storage/cache
+# This is generated automatically by the script.
+/storage/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Secret environment variables
+# Never commit API keys or secrets!
+.env
+
+# Editor and IDE configuration
+# Good practice to ignore project-specific editor settings.
+/.vscode/
+
+# Operating System generated files
+.DS_Store
+Thumbs.db
+
+# Optional: Your data files
+# Professionals ignore data, but for convenience on a small project, 
+# you can delete the line below to include your papers in the repository.
+/research_papers/
