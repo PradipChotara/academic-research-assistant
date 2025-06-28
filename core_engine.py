@@ -10,7 +10,6 @@ from llama_index.core import (
     StorageContext,
     load_index_from_storage
 )
-# --- NEW IMPORTS for Sub-Question Engine ---
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.core.query_engine import SubQuestionQueryEngine
 from llama_index.core.vector_stores import MetadataFilter, ExactMatchFilter
@@ -74,12 +73,12 @@ def load_index():
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     return load_index_from_storage(storage_context)
 
-# --- NEW FUNCTION for Advanced Engine ---
+# --- MODIFIED FUNCTION for Advanced Engine ---
 
 @st.cache_resource(show_spinner="Creating advanced analysis engine...")
-def create_sub_question_engine(index):
+def create_sub_question_engine(_index): # CHANGED: Argument name from 'index' to '_index'
     """Creates a SubQuestionQueryEngine from the documents in the index."""
-    docstore = index.docstore.docs
+    docstore = _index.docstore.docs # CHANGED: Using '_index'
     if not docstore:
         return None
 
@@ -89,18 +88,18 @@ def create_sub_question_engine(index):
         file_name = doc.metadata.get('file_name', 'Unknown Document')
         
         # Create a retriever that only looks at this one document
-        retriever = index.as_retriever(
+        retriever = _index.as_retriever( # CHANGED: Using '_index'
             filters=MetadataFilter(filters=[ExactMatchFilter(key="file_name", value=file_name)])
         )
         
         # Create a query engine for this single document
-        doc_query_engine = index.as_query_engine(retriever=retriever)
+        doc_query_engine = _index.as_query_engine(retriever=retriever) # CHANGED: Using '_index'
 
         # Create the tool. The description is crucial for the AI to know when to use it.
         query_engine_tool = QueryEngineTool(
             query_engine=doc_query_engine,
             metadata=ToolMetadata(
-                name=f"tool_{file_name.replace(' ', '_')}",
+                name=f"tool_{file_name.replace(' ', '_').replace('.pdf', '')}",
                 description=(
                     "This tool is an expert on the research paper titled "
                     f"'{file_name}'. Use it to answer specific questions about this paper's "
