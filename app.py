@@ -1,7 +1,6 @@
 # app.py
 
 import streamlit as st
-from core_engine import configure_ai, load_index
 
 st.set_page_config(
     page_title="Home - Academic Research Assistant",
@@ -10,25 +9,21 @@ st.set_page_config(
 )
 
 st.title("🏠 Academic Research Assistant")
+st.write("---")
+st.header("Welcome!")
+
 st.info(
-    "Welcome! This application helps you chat with and manage your academic papers. "
-    "Navigate to the pages in the sidebar to get started.",
+    """
+    This application is your personal AI assistant for academic research.
+    It allows you to manage a collection of papers and chat with an AI that uses them as its knowledge base.
+
+    **How to use this app:**
+
+    1.  **📄 Documents:** Go to the Documents page to upload the PDF files you want the AI to learn from. You can also delete papers you no longer need.
+
+    2.  **⚙️ Indexing:** After uploading or deleting documents, go to the Indexing page. Click the button to build the AI's knowledge base. This step must be done anytime you change your documents.
+
+    3.  **💬 App:** Once the index is built, navigate to the App page to start chatting with your research assistant!
+    """,
     icon="ℹ️"
 )
-
-# --- Initialize AI Engine and Index ---
-# This runs once and caches the result for the entire user session
-configure_ai()
-index = load_index()
-
-# Store the loaded index in the session state to be accessible across pages
-if "index" not in st.session_state:
-    st.session_state.index = index
-
-st.success("AI Engine and Data Index are loaded and ready. Please proceed to a page on the left.", icon="✅")
-
-# --- Optional: Display some stats or info on the homepage ---
-with st.expander("Show Document Stats"):
-    if "index" in st.session_state:
-        num_docs = len(st.session_state.index.docstore.docs)
-        st.write(f"There are currently **{num_docs}** documents indexed.")
