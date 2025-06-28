@@ -12,7 +12,8 @@ from llama_index.core import (
 )
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.core.query_engine import SubQuestionQueryEngine
-from llama_index.core.vector_stores import MetadataFilter, ExactMatchFilter
+# --- CHANGED LINE: Import MetadataFilters (plural) instead of MetadataFilter ---
+from llama_index.core.vector_stores import MetadataFilters, ExactMatchFilter
 
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
@@ -73,29 +74,24 @@ def load_index():
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     return load_index_from_storage(storage_context)
 
-# --- MODIFIED FUNCTION for Advanced Engine ---
-
 @st.cache_resource(show_spinner="Creating advanced analysis engine...")
-def create_sub_question_engine(_index): # CHANGED: Argument name from 'index' to '_index'
+def create_sub_question_engine(_index):
     """Creates a SubQuestionQueryEngine from the documents in the index."""
-    docstore = _index.docstore.docs # CHANGED: Using '_index'
+    docstore = _index.docstore.docs
     if not docstore:
         return None
 
-    # Create a list of "expert tools," one for each document
     query_engine_tools = []
     for doc_id, doc in docstore.items():
         file_name = doc.metadata.get('file_name', 'Unknown Document')
         
-        # Create a retriever that only looks at this one document
-        retriever = _index.as_retriever( # CHANGED: Using '_index'
-            filters=MetadataFilter(filters=[ExactMatchFilter(key="file_name", value=file_name)])
+        retriever = _index.as_retriever(
+            # --- CHANGED LINE: Use MetadataFilters (plural) ---
+            filters=MetadataFilters(filters=[ExactMatchFilter(key="file_name", value=file_name)])
         )
         
-        # Create a query engine for this single document
-        doc_query_engine = _index.as_query_engine(retriever=retriever) # CHANGED: Using '_index'
+        doc_query_engine = _index.as_query_engine(retriever=retriever)
 
-        # Create the tool. The description is crucial for the AI to know when to use it.
         query_engine_tool = QueryEngineTool(
             query_engine=doc_query_engine,
             metadata=ToolMetadata(
@@ -109,5 +105,4 @@ def create_sub_question_engine(_index): # CHANGED: Argument name from 'index' to
         )
         query_engine_tools.append(query_engine_tool)
 
-    # Create the master Sub-Question Query Engine from the list of expert tools
     return SubQuestionQueryEngine.from_defaults(query_engine_tools=query_engine_tools)
