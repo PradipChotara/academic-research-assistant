@@ -1,51 +1,31 @@
 # pages/chat.py
 
 import streamlit as st
-from core_engine import configure_llm, load_index
 
-st.set_page_config(page_title="App", page_icon="💬")
+st.set_page_config(page_title="Chat", page_icon="💬")
 st.title("💬 Chat with the Research Assistant")
 
-# --- NEW SECTION: Add the Clear Chat button to the sidebar ---
+# --- Check for initialization ---
+if "chat_engine" not in st.session_state:
+    st.error("Chat engine is not ready. Please go to the Home page to initialize the application first.", icon="🏠")
+    st.stop()
+
+# --- Add a button to clear chat history ---
 with st.sidebar:
     st.header("Controls")
     if st.button("Clear Chat History", type="primary"):
-        # Reset the messages list to its initial state
         st.session_state.messages = [{"role": "assistant", "content": "Hello! The chat has been cleared. How can I help?"}]
-        # Reset the chat engine's memory
-        if "chat_engine" in st.session_state:
-            st.session_state.chat_engine.reset()
-        # Rerun the page to display the cleared chat immediately
+        st.session_state.chat_engine.reset()
         st.rerun()
-
-# --- Load Index and LLM ---
-# This page is the only one that needs the heavy LLM.
-index = load_index()
-llm = configure_llm()
-
-if index is None:
-    st.error("No data index found. Please go to the 'Indexing' page and build the index first.", icon="⚙️")
-    st.stop()
-
-if llm is None:
-    st.error("Language Model could not be loaded. This may be due to resource limitations. "
-             "Please ensure the application is running on a machine with sufficient memory.", icon="🚨")
-    st.stop()
-
-# --- Initialize Chat Engine ---
-if "chat_engine" not in st.session_state:
-    st.session_state.chat_engine = index.as_chat_engine(chat_mode="context", llm=llm, verbose=True)
 
 # --- Chat History and User Input ---
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm ready to answer questions about your documents."}]
 
-# Display past chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# Get user input and handle chat logic
 if prompt := st.chat_input("Your question..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):

@@ -11,8 +11,8 @@ from llama_index.core import (
     load_index_from_storage
 )
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
-from llama_index.core.query_engine import SubQuestionQueryEngine
-# --- CHANGED LINE: Import MetadataFilters (plural) instead of MetadataFilter ---
+# --- CHANGED: Import RetrieverQueryEngine and SubQuestionQueryEngine ---
+from llama_index.core.query_engine import SubQuestionQueryEngine, RetrieverQueryEngine
 from llama_index.core.vector_stores import MetadataFilters, ExactMatchFilter
 
 from llama_index.llms.ollama import Ollama
@@ -40,7 +40,7 @@ def configure_embed_model():
         st.error(f"Failed to configure embedding model: {e}", icon="🚨")
         return False
 
-@st.cache_resource(show_spinner="Connecting to Language Model... This may take a while.")
+@st.cache_resource(show_spinner="Connecting to Language Model...")
 def configure_llm():
     """Sets up the language model. This is the heavy operation."""
     try:
@@ -48,9 +48,6 @@ def configure_llm():
         print("Language Model configured.")
         return Settings.llm
     except ResponseError as e:
-        st.error(f"Failed to load the language model: {e}", icon="🚨")
-        st.info("The AI model may require more resources (RAM) than are available. "
-                "Chat functionality will be disabled.")
         return None
 
 def rebuild_index():
@@ -86,11 +83,12 @@ def create_sub_question_engine(_index):
         file_name = doc.metadata.get('file_name', 'Unknown Document')
         
         retriever = _index.as_retriever(
-            # --- CHANGED LINE: Use MetadataFilters (plural) ---
             filters=MetadataFilters(filters=[ExactMatchFilter(key="file_name", value=file_name)])
         )
         
-        doc_query_engine = _index.as_query_engine(retriever=retriever)
+        # --- CHANGED LINE: Use RetrieverQueryEngine directly ---
+        # This is the correct way to build an engine with a custom retriever
+        doc_query_engine = RetrieverQueryEngine(retriever=retriever)
 
         query_engine_tool = QueryEngineTool(
             query_engine=doc_query_engine,
