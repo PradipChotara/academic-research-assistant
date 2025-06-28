@@ -10,6 +10,11 @@ from llama_index.core import (
     StorageContext,
     load_index_from_storage
 )
+# --- NEW IMPORTS for Sub-Question Engine ---
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.query_engine import SubQuestionQueryEngine
+from llama_index.core.vector_stores import MetadataFilter, ExactMatchFilter
+
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 from ollama import ResponseError
@@ -50,23 +55,60 @@ def configure_llm():
 
 def rebuild_index():
     """Deletes old index and builds a new one from documents in DATA_DIR."""
-    # Delete old storage directory
     if os.path.exists(PERSIST_DIR):
         shutil.rmtree(PERSIST_DIR)
     os.makedirs(PERSIST_DIR, exist_ok=True)
 
-    # Load documents and create the index
     documents = SimpleDirectoryReader(DATA_DIR).load_data()
     if not documents:
         return "No documents found to index."
     
     index = VectorStoreIndex.from_documents(documents)
     index.storage_context.persist(persist_dir=PERSIST_DIR)
-    return f"Successfully built index for {len(documents)} document(s)."
+    return f"Successfully built index for {len(index.docstore.docs)} document chunks."
 
 def load_index():
     """Loads the existing index from storage."""
     if not os.listdir(PERSIST_DIR):
-        return None # No index exists
+        return None
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     return load_index_from_storage(storage_context)
+
+# --- NEW FUNCTION for Advanced Engine ---
+
+@st.cache_resource(show_spinner="Creating advanced analysis engine...")
+def create_sub_question_engine(index):
+    """Creates a SubQuestionQueryEngine from the documents in the index."""
+    docstore = index.docstore.docs
+    if not docstore:
+        return None
+
+    # Create a list of "expert tools," one for each document
+    query_engine_tools = []
+    for doc_id, doc in docstore.items():
+        file_name = doc.metadata.get('file_name', 'Unknown Document')
+        
+        # Create a retriever that only looks at this one document
+        retriever = index.as_retriever(
+            filters=MetadataFilter(filters=[ExactMatchFilter(key="file_name", value=file_name)])
+        )
+        
+        # Create a query engine for this single document
+        doc_query_engine = index.as_query_engine(retriever=retriever)
+
+        # Create the tool. The description is crucial for the AI to know when to use it.
+        query_engine_tool = QueryEngineTool(
+            query_engine=doc_query_engine,
+            metadata=ToolMetadata(
+                name=f"tool_{file_name.replace(' ', '_')}",
+                description=(
+                    "This tool is an expert on the research paper titled "
+                    f"'{file_name}'. Use it to answer specific questions about this paper's "
+                    "content, methodology, findings, etc."
+                ),
+            ),
+        )
+        query_engine_tools.append(query_engine_tool)
+
+    # Create the master Sub-Question Query Engine from the list of expert tools
+    return SubQuestionQueryEngine.from_defaults(query_engine_tools=query_engine_tools)
