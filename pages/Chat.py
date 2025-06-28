@@ -1,10 +1,22 @@
-# pages/3_💬_App.py
+# pages/chat.py
 
 import streamlit as st
 from core_engine import configure_llm, load_index
 
 st.set_page_config(page_title="App", page_icon="💬")
 st.title("💬 Chat with the Research Assistant")
+
+# --- NEW SECTION: Add the Clear Chat button to the sidebar ---
+with st.sidebar:
+    st.header("Controls")
+    if st.button("Clear Chat History", type="primary"):
+        # Reset the messages list to its initial state
+        st.session_state.messages = [{"role": "assistant", "content": "Hello! The chat has been cleared. How can I help?"}]
+        # Reset the chat engine's memory
+        if "chat_engine" in st.session_state:
+            st.session_state.chat_engine.reset()
+        # Rerun the page to display the cleared chat immediately
+        st.rerun()
 
 # --- Load Index and LLM ---
 # This page is the only one that needs the heavy LLM.
@@ -28,10 +40,12 @@ if "chat_engine" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm ready to answer questions about your documents."}]
 
+# Display past chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+# Get user input and handle chat logic
 if prompt := st.chat_input("Your question..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
